@@ -1,37 +1,39 @@
 # TG SSH Bot
 
-Execute commands on remote servers directly from Telegram. No servers to manage — just your bot and an SSH client.
+Execute commands on remote servers directly from Telegram. Single static binary — no runtime dependencies.
 
 ## Features
 
-- **AES-256-GCM encryption** — passwords encrypted at rest with unique IV per entry
-- **Session persistence** — saves last SSH session per user for instant `/reconnect`
-- **Configurable port** — supports any SSH port (defaults to 22)
-- **Terminal-like UX** — send any message as a command, get formatted output
-- **User whitelist** — restrict access to specific Telegram user IDs
-- **Auto-cleanup** — password messages deleted after input
+- **Single binary** — one file, no node_modules, no runtime deps
+- **AES-256-GCM encryption** — passwords encrypted at rest with unique nonce
+- **Session persistence** — saves last SSH session for instant `/reconnect`
+- **Configurable port** — supports any SSH port
+- **Terminal-like UX** — formatted output with server info and execution time
+- **User whitelist** — restrict access to specific Telegram IDs
+- **SQLite** — lightweight embedded database
 
 ## Quick Start
 
-### 1. Create a Telegram bot
+### Option 1: Download the binary
 
-1. Open [@BotFather](https://t.me/BotFather) in Telegram
-2. Send `/newbot` and follow the prompts
-3. Copy the bot token
+Go to [Releases](../../releases) and download the latest `tg-ssh-bot` binary.
 
-### 2. Get your Telegram user ID
+```bash
+chmod +x tg-ssh-bot
+cp .env.example .env
+# Edit .env with your credentials
+./tg-ssh-bot
+```
 
-Send any message to [@userinfobot](https://t.me/userinfobot) — it replies with your numeric ID.
-
-### 3. Set up the project
+### Option 2: Build from source
 
 ```bash
 git clone <your-repo-url>
 cd tg-ssh-bot
-npm install
+go build -ldflags="-s -w" -o tg-ssh-bot .
 ```
 
-### 4. Configure
+### Configuration
 
 ```bash
 cp .env.example .env
@@ -41,52 +43,34 @@ Edit `.env`:
 
 ```env
 BOT_TOKEN=123456:ABC-DEF...
-ENCRYPTION_KEY=c402dcc4bed5bba11ce91136fea6da5a4332c3d3f52f444af3f87d5e96794b08
+ENCRYPTION_KEY=ee40de55b3eb1faceed105109453742e308d1a854ea982520f7ab8a60ea84846
 ALLOWED_USERS=123456789
 ```
 
-Generate a new encryption key if you want:
+Generate a new encryption key:
 
 ```bash
-node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+openssl rand -hex 32
 ```
 
-### 5. Run
+### Run
 
 ```bash
-npm start
+./tg-ssh-bot
 ```
 
-Or with auto-reload during development:
-
-```bash
-npm run dev
-```
-
-## Usage
-
-### Commands
+## Commands
 
 | Command | Description |
 |---------|-------------|
 | `/start` | Show welcome message |
-| `/connect` | Connect to a new SSH server (step-by-step prompt) |
+| `/connect` | Connect to a new SSH server |
 | `/reconnect` | Reconnect to last saved server |
 | `/disconnect` | End current SSH session |
 | `/status` | Show connection state |
 | `/cancel` | Cancel connection setup |
 
-### Connecting
-
-1. Send `/connect`
-2. Enter the **host** (e.g. `192.168.1.100` or `myserver.com`)
-3. Enter the **port** (leave empty for 22)
-4. Enter the **username**
-5. Enter the **password** (auto-deleted for security)
-
-Once connected, **any message you send is executed as a command** on the remote server.
-
-### Example Session
+## Example Session
 
 ```
 You:    /connect
@@ -102,7 +86,6 @@ Bot:    ✅ Connected
         root@myserver.com:2222
 
         Send any message to execute commands.
-        Type /disconnect to end session.
 
 You:    uname -a
 Bot:    🖥 root@myserver.com:2222
@@ -112,49 +95,41 @@ Bot:    🖥 root@myserver.com:2222
         Linux myserver 5.15.0 #1 SMP x86_64 GNU/Linux
 
         156ms
-
-You:    df -h
-Bot:    🖥 root@myserver.com:2222
-
-        $ df -h
-
-        Filesystem      Size  Used Avail Use% Mounted on
-        /dev/sda1        50G   12G   36G  25% /
-
-        89ms
 ```
 
 ## Project Structure
 
 ```
 tg-ssh-bot/
-├─ .env.example          # Config template
-├─ .env                  # Your config (git-ignored)
-├─ package.json
-└─ src/
-   ├─ index.js           # Bot logic & commands
-   ├─ db.js              # SQLite session storage
-   ├─ ssh.js             # SSH client wrapper
-   └─ utils/
-      ├─ encryption.js   # AES-256-GCM encrypt/decrypt
-      └── output.js      # ANSI strip, formatting, chunking
+├─ main.go              # Entry point, config
+├─ bot.go               # Telegram bot, commands, conversation flow
+├─ ssh.go               # SSH client
+├─ db.go                # SQLite database
+├─ crypto.go            # AES-256-GCM encryption
+├─ output.go            # ANSI stripping, formatting
+├─ .env                 # Config (git-ignored)
+└─ .github/workflows/
+   └─ build.yml         # GitHub Actions — builds static binary
 ```
+
+## GitHub Actions
+
+Push a tag to trigger a build and release:
+
+```bash
+git tag v1.0.0
+git push --tags
+```
+
+The workflow builds a static Linux AMD64 binary and attaches it to the GitHub release.
 
 ## Security
 
-- **Passwords encrypted** with AES-256-GCM before storing in SQLite
-- **Unique IV** per encryption — same password produces different ciphertext
-- **Master key** from env var — never committed to git
-- **Password messages** auto-deleted after bot reads them
-- **User whitelist** — only approved Telegram IDs can use the bot
+- **AES-256-GCM** encryption with random nonce per entry
+- **Master key** from env var — never committed
+- **Password messages** auto-deleted after input
+- **User whitelist** — only approved Telegram IDs
 - **DM only** — ignores group messages
-
-## Limitations
-
-- One SSH session per user at a time
-- No interactive programs (vim, top, htop) — command-exec only via `exec`
-- Command timeout at 30 seconds
-- 30-second inactivity cleanup for dead sessions
 
 ## License
 
